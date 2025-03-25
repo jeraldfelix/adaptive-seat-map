@@ -4,6 +4,7 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import SeatMap from '../components/ui/SeatMap';
 import BookingCard from '../components/ui/BookingCard';
+import NLPSeatPrompt from '../components/ui/NLPSeatPrompt';
 import { Seat, MOCK_CURRENT_USER, fetchSeats } from '../utils/mockData';
 import { Search, Filter, ChevronDown, Sliders } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -243,6 +244,12 @@ const SeatSelection = () => {
               </div>
             </div>
           </div>
+          
+          {/* NLP Prompt */}
+          <NLPSeatPrompt 
+            onSeatFound={handleSelectSeat} 
+            availableSeats={availableSeats} 
+          />
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Seat Map - Takes 2/3 of the width on desktop */}
