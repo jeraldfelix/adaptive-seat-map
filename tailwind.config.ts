@@ -67,7 +67,7 @@ export default {
           available: "#E3F2FD",
           booked: "#FFF3E0",
           reserved: "#F3E5F5",
-          selected: "#0071E3",
+          selected: "#4CAF50",
           occupied: "#FFCDD2",
           hover: "#E8F5E9",
         },

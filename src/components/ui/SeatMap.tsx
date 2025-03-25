@@ -222,7 +222,7 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
           </div>
           {selectedSeatId && (
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-seatmap-selected border border-blue-400 rounded-sm mr-1.5"></div>
+              <div className="w-4 h-4 bg-seatmap-selected border border-green-400 rounded-sm mr-1.5"></div>
               <span className="text-xs">Selected</span>
             </div>
           )}
