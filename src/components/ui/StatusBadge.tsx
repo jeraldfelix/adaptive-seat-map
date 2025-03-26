@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 
 type StatusBadgeProps = {
-  status: 'available' | 'booked' | 'reserved' | 'occupied' | 'selected';
+  status: 'available' | 'booked' | 'reserved' | 'occupied' | 'selected' | 'pending' | 'confirmed';
   className?: string;
 };
 
@@ -36,6 +36,18 @@ const statusConfig = {
     bgColor: 'bg-green-100',
     textColor: 'text-green-800',
     borderColor: 'border-green-200'
+  },
+  pending: {
+    label: 'Pending',
+    bgColor: 'bg-yellow-100',
+    textColor: 'text-yellow-800',
+    borderColor: 'border-yellow-200'
+  },
+  confirmed: {
+    label: 'Confirmed',
+    bgColor: 'bg-blue-100',
+    textColor: 'text-blue-800',
+    borderColor: 'border-blue-200'
   }
 };
 

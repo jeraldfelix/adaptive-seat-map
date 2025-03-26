@@ -10,6 +10,7 @@ export interface Seat {
   floor: number;
   section: string;
   amenities: string[];
+  nearTeam?: string;
 }
 
 export interface Office {
@@ -17,6 +18,7 @@ export interface Office {
   name: string;
   floors: number[];
   sections: Record<number, string[]>;
+  teams: string[];
 }
 
 export interface User {
@@ -25,6 +27,7 @@ export interface User {
   email: string;
   profileImage: string;
   role: 'user' | 'admin';
+  team?: string;
   preferences: {
     preferredFloor?: number;
     preferredSection?: string;
@@ -53,7 +56,8 @@ export const MOCK_OFFICE: Office = {
     1: ['A', 'B', 'C', 'D'],
     2: ['A', 'B', 'C', 'D'],
     3: ['A', 'B', 'C']
-  }
+  },
+  teams: ['Engineering', 'Design', 'Marketing', 'Sales', 'HR', 'Finance', 'Product', 'Leadership']
 };
 
 export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
@@ -70,6 +74,10 @@ export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
   const allAmenities = ['window', 'standing desk', 'dual monitor', 'ergonomic chair', 'near kitchen', 'near meeting room'];
   const amenities = allAmenities.filter(() => Math.random() > 0.7);
   
+  // Randomly assign a team for team-based allocation
+  const randomTeamIndex = Math.floor(Math.random() * MOCK_OFFICE.teams.length);
+  const nearTeam = Math.random() > 0.5 ? MOCK_OFFICE.teams[randomTeamIndex] : undefined;
+  
   return {
     id: `seat-${i + 1}`,
     name: `${floor}${section}-${seatNumber}`,
@@ -77,6 +85,7 @@ export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
     floor,
     section,
     amenities,
+    nearTeam,
     assignedTo: randomStatus === 'booked' || randomStatus === 'occupied' ? `user-${Math.floor(Math.random() * 10) + 1}` : undefined
   };
 });
@@ -87,6 +96,7 @@ export const MOCK_CURRENT_USER: User = {
   email: 'alex@example.com',
   profileImage: 'https://i.pravatar.cc/150?u=alex',
   role: 'user',
+  team: 'Engineering',
   preferences: {
     preferredFloor: 2,
     preferredSection: 'B',
@@ -106,6 +116,7 @@ export const MOCK_ADMIN_USER: User = {
   email: 'sam@example.com',
   profileImage: 'https://i.pravatar.cc/150?u=sam',
   role: 'admin',
+  team: 'Leadership',
   preferences: {
     amenities: ['dual monitor', 'ergonomic chair']
   },
@@ -165,3 +176,20 @@ export const bookSeat = async (seatId: string, userId: string): Promise<{ succes
   // Simulate successful booking
   return { success: true };
 };
+
+export const fetchTeamMembers = async (team: string): Promise<User[]> => {
+  // Simulate API latency
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  // In a real app, you would fetch actual team members
+  return [MOCK_CURRENT_USER, MOCK_ADMIN_USER].filter(user => user.team === team);
+};
+
+export const checkSeatConfirmation = async (bookingId: string): Promise<boolean> => {
+  // Simulate API latency
+  await new Promise(resolve => setTimeout(resolve, 600));
+  
+  // Simulate 80% confirmation rate
+  return Math.random() > 0.2;
+};
+

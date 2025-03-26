@@ -5,10 +5,12 @@ import Footer from '../components/layout/Footer';
 import SeatMap from '../components/ui/SeatMap';
 import BookingCard from '../components/ui/BookingCard';
 import NLPSeatPrompt from '../components/ui/NLPSeatPrompt';
+import AIIntegration from '../components/ui/AIIntegration';
 import { Seat, MOCK_CURRENT_USER, fetchSeats } from '../utils/mockData';
-import { Search, Filter, ChevronDown, Sliders } from 'lucide-react';
+import { Search, Filter, ChevronDown, Sliders, UserPlus2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 const SeatSelection = () => {
@@ -20,6 +22,7 @@ const SeatSelection = () => {
     section: '',
     amenities: [] as string[],
   });
+  const [activeTab, setActiveTab] = useState('map');
   
   useEffect(() => {
     const loadSeats = async () => {
@@ -245,16 +248,55 @@ const SeatSelection = () => {
             </div>
           </div>
           
-          {/* NLP Prompt */}
-          <NLPSeatPrompt 
-            onSeatFound={handleSelectSeat} 
-            availableSeats={availableSeats} 
-          />
-          
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Seat Map - Takes 2/3 of the width on desktop */}
+            {/* Main Content - Takes 2/3 of the width on desktop */}
             <div className="lg:col-span-2">
-              <SeatMap onSelectSeat={handleSelectSeat} selectedSeatId={selectedSeat?.id} />
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="map">
+                    Seat Map
+                  </TabsTrigger>
+                  <TabsTrigger value="ai">
+                    AI Integration
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="map" className="mt-0">
+                  {/* NLP Prompt */}
+                  <NLPSeatPrompt 
+                    onSeatFound={handleSelectSeat} 
+                    availableSeats={availableSeats} 
+                  />
+                  
+                  <div className="mt-4">
+                    <SeatMap onSelectSeat={handleSelectSeat} selectedSeatId={selectedSeat?.id} />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="ai" className="mt-0">
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold mb-2">AI-Powered Seat Allocation</h2>
+                      <p className="text-gray-600">
+                        Set up AI integration to automatically allocate seats based on team proximity and user preferences.
+                      </p>
+                    </div>
+                    
+                    <AIIntegration />
+                    
+                    <div className="mt-6 bg-blue-50 rounded-lg p-4">
+                      <h3 className="text-md font-medium text-blue-800 mb-2 flex items-center">
+                        <UserPlus2 className="h-4 w-4 mr-2" />
+                        Team-Based Allocation
+                      </h3>
+                      <p className="text-sm text-blue-700">
+                        When you specify your department or team, the system will automatically try to allocate
+                        seats near team members to facilitate collaboration.
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
             
             {/* Booking Section - Takes 1/3 of the width on desktop */}
