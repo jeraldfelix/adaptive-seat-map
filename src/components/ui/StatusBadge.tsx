@@ -33,9 +33,9 @@ const statusConfig = {
   },
   selected: {
     label: 'Selected',
-    bgColor: 'bg-green-100',
-    textColor: 'text-green-800',
-    borderColor: 'border-green-200'
+    bgColor: 'bg-blue-100',
+    textColor: 'text-blue-800',
+    borderColor: 'border-blue-200'
   },
   pending: {
     label: 'Pending',
