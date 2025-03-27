@@ -1,25 +1,12 @@
-
 /**
- * This file provides integration with Mistral AI for seat allocation and recommendations.
- * To use these functions, a valid Mistral API key must be set in localStorage.
+ * This file provides AI functionality for seat allocation and recommendations.
  */
 
 import { Seat, User } from "./mockData";
 
-// Utility to get the API key from localStorage
-const getMistralApiKey = (): string | null => {
-  try {
-    const key = localStorage.getItem('mistral-api-key');
-    return key ? JSON.parse(key) : null;
-  } catch (error) {
-    console.error('Error retrieving Mistral API key:', error);
-    return null;
-  }
-};
-
-// Check if Mistral is configured
+// Check if AI is configured - now always returns true
 export const isMistralConfigured = (): boolean => {
-  return !!getMistralApiKey();
+  return true;
 };
 
 // Simple interface for the AI response
@@ -31,7 +18,7 @@ interface AiResponse {
 }
 
 /**
- * Uses Mistral AI to recommend seats based on user preferences and team
+ * Get AI seat recommendations based on user preferences and team
  */
 export const getAiSeatRecommendations = async (
   user: User,
@@ -44,20 +31,7 @@ export const getAiSeatRecommendations = async (
     amenities?: string[];
   }
 ): Promise<AiResponse> => {
-  const apiKey = getMistralApiKey();
-  
-  if (!apiKey) {
-    return {
-      recommendation: {
-        message: "Mistral API key not configured. Please set up AI integration in the settings.",
-      }
-    };
-  }
-  
   try {
-    // In a real implementation, you would call the Mistral API here
-    // This is a mock implementation that simulates an AI response
-    
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
     
@@ -89,7 +63,7 @@ export const getAiSeatRecommendations = async (
       );
     }
     
-    // Sort by best match (this would be done by the AI in reality)
+    // Sort by best match
     recommendedSeats.sort((a, b) => {
       // Simple scoring algorithm
       const scoreA = getSeatScore(a, user, preferences);
@@ -116,7 +90,7 @@ export const getAiSeatRecommendations = async (
     };
     
   } catch (error) {
-    console.error('Error calling Mistral API:', error);
+    console.error('Error with AI recommendations:', error);
     return {
       recommendation: {
         message: "An error occurred while getting AI recommendations. Please try again.",
