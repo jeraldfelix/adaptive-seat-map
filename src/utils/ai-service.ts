@@ -1,4 +1,3 @@
-
 /**
  * This file provides AI functionality for seat allocation and recommendations.
  */
@@ -124,6 +123,7 @@ const prioritizeSeatsForDepartment = (
     preferredFloor?: number;
     preferredSection?: string;
     amenities?: string[];
+    nearTeam?: boolean;
   }
 ): Seat[] => {
   // Create priority groups for seats
@@ -131,6 +131,7 @@ const prioritizeSeatsForDepartment = (
   const adjacentInSameSection: Seat[] = [];
   const otherSectionsOnSameFloor: Seat[] = [];
   const otherFloors: Seat[] = [];
+  const nearTeamSeats: Seat[] = [];
   
   // Group all seats by priority
   availableSeats.forEach(seat => {
@@ -149,6 +150,11 @@ const prioritizeSeatsForDepartment = (
     
     if (preferences.preferredSection && seat.section !== preferences.preferredSection) {
       return; // Skip seats that don't match preferred section
+    }
+    
+    // NEW FEATURE: Team proximity check
+    if (preferences.nearTeam && seat.nearTeam === department) {
+      nearTeamSeats.push(seat);
     }
     
     // Now group by department priority
@@ -185,12 +191,21 @@ const prioritizeSeatsForDepartment = (
   };
   
   // Sort each category by quality
+  const sortedNearTeam = sortByQuality(nearTeamSeats);
   const sortedExactZone = sortByQuality(exactDepartmentZone);
   const sortedAdjacent = sortByQuality(adjacentInSameSection);
   const sortedOtherSections = sortByQuality(otherSectionsOnSameFloor);
   const sortedOtherFloors = sortByQuality(otherFloors);
   
-  // Combine all groups by priority
+  // New feature: Proximity to team is highest priority when enabled
+  if (preferences.nearTeam && sortedNearTeam.length > 0) {
+    // Prioritize team proximity over department zone when that preference is set
+    return sortedNearTeam;
+  }
+  
+  // Combine all groups by priority - UPDATED to implement the fallback system
+  // If no seats are available in the department zone, it will automatically
+  // allocate the next best possible nearby seats
   return [
     ...sortedExactZone,
     ...sortedAdjacent,
@@ -236,9 +251,16 @@ const getGeneralRecommendations = (
   
   // If team-based allocation is requested
   if (preferences.department && preferences.nearTeam) {
-    recommendedSeats = recommendedSeats.filter(
+    // Try to find seats near the team first
+    const nearTeamSeats = recommendedSeats.filter(
       seat => seat.nearTeam === preferences.department
     );
+    
+    // If seats near team are available, prioritize those
+    if (nearTeamSeats.length > 0) {
+      recommendedSeats = nearTeamSeats;
+    }
+    // Otherwise, keep the filtered seats (automatic fallback)
   }
   
   // Sort by best match
@@ -260,10 +282,17 @@ const getGeneralRecommendations = (
     };
   }
   
+  // Create a message mentioning team proximity if relevant
+  let message = `Based on your general preferences, I recommend these seats which provide ${getRecommendationReasoning(topRecommendations[0], preferences)}.`;
+  
+  if (preferences.nearTeam && topRecommendations[0].nearTeam === preferences.department) {
+    message = `I found seats near your ${preferences.department} team members that match your preferences.`;
+  }
+  
   return {
     recommendation: {
       seatIds: topRecommendations.map(seat => seat.id),
-      message: `Based on your general preferences, I recommend these seats which provide ${getRecommendationReasoning(topRecommendations[0], preferences)}.`,
+      message: message,
     }
   };
 };
@@ -275,6 +304,8 @@ const getSeatScore = (
     preferredFloor?: number;
     preferredSection?: string;
     amenities?: string[];
+    nearTeam?: boolean;
+    department?: string;
   }
 ): number => {
   let score = 0;
@@ -296,6 +327,11 @@ const getSeatScore = (
         score += 1;
       }
     });
+  }
+  
+  // NEW: Score boost for team proximity
+  if (preferences.nearTeam && preferences.department && seat.nearTeam === preferences.department) {
+    score += 5; // High priority for team proximity
   }
   
   return score;

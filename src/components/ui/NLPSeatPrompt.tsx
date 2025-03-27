@@ -1,9 +1,9 @@
 
 import { useState } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Seat } from '../../utils/mockData';
+import { Seat, MOCK_CURRENT_USER } from '../../utils/mockData';
 
 interface NLPSeatPromptProps {
   onSeatFound: (seat: Seat) => void;
@@ -46,6 +46,12 @@ const NLPSeatPrompt = ({ onSeatFound, availableSeats }: NLPSeatPromptProps) => {
       sectionPreference = sectionMatch[1].toUpperCase();
     }
     
+    // New: Parse team proximity preference
+    const wantsTeamProximity = lowercaseQuery.includes('team') || 
+                               lowercaseQuery.includes('colleague') || 
+                               lowercaseQuery.includes('coworker') ||
+                               lowercaseQuery.includes('department');
+    
     // Calculate scores for each seat based on how well they match preferences
     const scoredSeats = availableSeats
       .filter(seat => seat.status === 'available')
@@ -69,6 +75,16 @@ const NLPSeatPrompt = ({ onSeatFound, availableSeats }: NLPSeatPromptProps) => {
           score += 5;
         }
         
+        // NEW: Score based on team proximity
+        if (wantsTeamProximity && MOCK_CURRENT_USER.team && seat.nearTeam === MOCK_CURRENT_USER.team) {
+          score += 8; // Higher priority for team proximity
+        }
+        
+        // NEW: If seat is in the user's department zone, give it a bonus
+        if (seat.departmentZone === MOCK_CURRENT_USER.team) {
+          score += 6;
+        }
+        
         return { seat, score };
       });
     
@@ -83,7 +99,19 @@ const NLPSeatPrompt = ({ onSeatFound, availableSeats }: NLPSeatPromptProps) => {
         const bestSeat = scoredSeats[0].seat;
         onSeatFound(bestSeat);
         
-        toast.success(`Found seat ${bestSeat.name} that matches your preferences!`, {
+        let successMessage = `Found seat ${bestSeat.name} that matches your preferences!`;
+        
+        // NEW: Enhanced success message with team proximity information
+        if (wantsTeamProximity && bestSeat.nearTeam === MOCK_CURRENT_USER.team) {
+          successMessage = `Found seat ${bestSeat.name} near your team members!`;
+        } else if (wantsTeamProximity && bestSeat.departmentZone === MOCK_CURRENT_USER.team) {
+          successMessage = `Found seat ${bestSeat.name} in your department zone!`;
+        } else if (wantsTeamProximity) {
+          // Fallback message when team proximity was requested but not available
+          successMessage = `Found the best available seat ${bestSeat.name}, though not directly near your team.`;
+        }
+        
+        toast.success(successMessage, {
           description: `Floor ${bestSeat.floor}, Section ${bestSeat.section} with ${bestSeat.amenities.join(', ')}`,
         });
       } else {
@@ -136,8 +164,12 @@ const NLPSeatPrompt = ({ onSeatFound, availableSeats }: NLPSeatPromptProps) => {
       </form>
       
       <p className="text-xs text-gray-500 mt-2">
-        Try: "I need a quiet spot with a standing desk" or "Find me a seat on floor 3 with dual monitors"
+        Try: "I need a quiet spot with a standing desk" or "Find me a seat near my team with dual monitors"
       </p>
+      <div className="flex items-center mt-2 text-xs text-blue-600">
+        <Users className="h-3 w-3 mr-1" />
+        <span>New! Team proximity is now considered in seat allocation</span>
+      </div>
     </div>
   );
 };
