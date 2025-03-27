@@ -1,8 +1,9 @@
+
 /**
  * This file provides AI functionality for seat allocation and recommendations.
  */
 
-import { Seat, User } from "./mockData";
+import { Seat, User, DEPARTMENT_ZONES, isSeatInDepartmentZone, isSeatNearDepartmentZone } from "./mockData";
 
 // Check if AI is configured - now always returns true
 export const isMistralConfigured = (): boolean => {
@@ -35,57 +36,66 @@ export const getAiSeatRecommendations = async (
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Filter seats based on preferences
-    let recommendedSeats = [...availableSeats];
+    // Get the user's department (either from preferences or user object)
+    const userDepartment = preferences.department || user.team;
     
-    if (preferences.preferredFloor !== undefined) {
-      recommendedSeats = recommendedSeats.filter(
-        seat => seat.floor === preferences.preferredFloor
-      );
+    if (!userDepartment) {
+      // If no department is specified, use general recommendations
+      return getGeneralRecommendations(user, availableSeats, preferences);
     }
     
-    if (preferences.preferredSection) {
-      recommendedSeats = recommendedSeats.filter(
-        seat => seat.section === preferences.preferredSection
-      );
+    // Get department zone info
+    const departmentZone = DEPARTMENT_ZONES[userDepartment];
+    if (!departmentZone) {
+      // Department not found in zones config, use general recommendations
+      return getGeneralRecommendations(user, availableSeats, preferences);
     }
     
-    if (preferences.amenities && preferences.amenities.length > 0) {
-      recommendedSeats = recommendedSeats.filter(seat => 
-        preferences.amenities!.every(amenity => seat.amenities.includes(amenity))
-      );
-    }
+    // Step 1: Filter available seats only
+    const allAvailableSeats = availableSeats.filter(
+      seat => seat.status === 'available' || seat.status === 'reserved'
+    );
     
-    // If team-based allocation is requested
-    if (preferences.department && preferences.nearTeam) {
-      recommendedSeats = recommendedSeats.filter(
-        seat => seat.nearTeam === preferences.department
-      );
-    }
+    // Step 2: Prioritize seats by location relative to department
+    const prioritizedSeats = prioritizeSeatsForDepartment(
+      allAvailableSeats,
+      userDepartment,
+      departmentZone,
+      preferences
+    );
     
-    // Sort by best match
-    recommendedSeats.sort((a, b) => {
-      // Simple scoring algorithm
-      const scoreA = getSeatScore(a, user, preferences);
-      const scoreB = getSeatScore(b, user, preferences);
-      return scoreB - scoreA;
-    });
-    
-    // Take the top 3 recommendations
-    const topRecommendations = recommendedSeats.slice(0, 3);
+    // Step 3: Take the top recommendations (max 3)
+    const topRecommendations = prioritizedSeats.slice(0, 3);
     
     if (topRecommendations.length === 0) {
       return {
         recommendation: {
-          message: "No seats match your preferences. Try adjusting your criteria.",
+          message: `No seats currently available that match your criteria. Please try adjusting your preferences or check back later.`,
         }
       };
+    }
+    
+    // Get the section of the top recommendation for messaging
+    const topSection = topRecommendations[0].section;
+    const topFloor = topRecommendations[0].floor;
+    
+    // Check if the top recommendation is in the department's primary zone
+    const isInDepartmentZone = departmentZone.sections.includes(topSection) && 
+                               topFloor === departmentZone.floor;
+    
+    let locationDescription = '';
+    if (isInDepartmentZone) {
+      locationDescription = `in your ${userDepartment} department zone (Section ${topSection})`;
+    } else if (topFloor === departmentZone.floor) {
+      locationDescription = `near your ${userDepartment} department zone (Section ${topSection})`;
+    } else {
+      locationDescription = `on floor ${topFloor} in Section ${topSection}`;
     }
     
     return {
       recommendation: {
         seatIds: topRecommendations.map(seat => seat.id),
-        message: `Based on your preferences${preferences.department ? ` and team (${preferences.department})` : ''}, I recommend these seats which provide ${getRecommendationReasoning(topRecommendations[0], preferences)}.`,
+        message: `Based on your preferences and ${userDepartment} department, I recommend these seats ${locationDescription}. ${getRecommendationReasoning(topRecommendations[0], preferences)}.`,
       }
     };
     
@@ -99,13 +109,169 @@ export const getAiSeatRecommendations = async (
   }
 };
 
-// Helper function to generate a score for a seat based on preferences
-const getSeatScore = (
-  seat: Seat, 
-  user: User, 
+/**
+ * Prioritize seats for a specific department following the priority algorithm:
+ * 1. Exact department section and floor
+ * 2. Adjacent seats in the same section
+ * 3. Other sections on the same floor
+ * 4. Other floors
+ */
+const prioritizeSeatsForDepartment = (
+  availableSeats: Seat[],
+  department: string,
+  departmentZone: { floor: number, sections: string[] },
+  preferences: {
+    preferredFloor?: number;
+    preferredSection?: string;
+    amenities?: string[];
+  }
+): Seat[] => {
+  // Create priority groups for seats
+  const exactDepartmentZone: Seat[] = [];
+  const adjacentInSameSection: Seat[] = [];
+  const otherSectionsOnSameFloor: Seat[] = [];
+  const otherFloors: Seat[] = [];
+  
+  // Group all seats by priority
+  availableSeats.forEach(seat => {
+    // Check if seat matches amenity preferences
+    if (preferences.amenities && preferences.amenities.length > 0) {
+      if (!preferences.amenities.every(amenity => seat.amenities.includes(amenity))) {
+        return; // Skip seats that don't match amenity preferences
+      }
+    }
+    
+    // Check if user specified a specific floor or section preference
+    // These take precedence over department-based allocation if specified
+    if (preferences.preferredFloor !== undefined && seat.floor !== preferences.preferredFloor) {
+      return; // Skip seats that don't match preferred floor
+    }
+    
+    if (preferences.preferredSection && seat.section !== preferences.preferredSection) {
+      return; // Skip seats that don't match preferred section
+    }
+    
+    // Now group by department priority
+    const isInPrimaryZone = departmentZone.sections.includes(seat.section) && 
+                           seat.floor === departmentZone.floor;
+                           
+    if (isInPrimaryZone) {
+      exactDepartmentZone.push(seat);
+    } else if (seat.floor === departmentZone.floor) {
+      if (departmentZone.sections.includes(seat.section)) {
+        // Same section but not primary zone (later seats in same section)
+        adjacentInSameSection.push(seat);
+      } else {
+        // Different section but same floor
+        otherSectionsOnSameFloor.push(seat);
+      }
+    } else {
+      // Different floor
+      otherFloors.push(seat);
+    }
+  });
+  
+  // Sort each group by quality (amenities, etc.)
+  const sortByQuality = (seats: Seat[]) => {
+    return seats.sort((a, b) => {
+      const scoreA = getSeatScore(a, preferences);
+      const scoreB = getSeatScore(b, preferences);
+      // If scores are equal, sort by name for deterministic results
+      if (scoreB === scoreA) {
+        return a.name.localeCompare(b.name);
+      }
+      return scoreB - scoreA;
+    });
+  };
+  
+  // Sort each category by quality
+  const sortedExactZone = sortByQuality(exactDepartmentZone);
+  const sortedAdjacent = sortByQuality(adjacentInSameSection);
+  const sortedOtherSections = sortByQuality(otherSectionsOnSameFloor);
+  const sortedOtherFloors = sortByQuality(otherFloors);
+  
+  // Combine all groups by priority
+  return [
+    ...sortedExactZone,
+    ...sortedAdjacent,
+    ...sortedOtherSections,
+    ...sortedOtherFloors
+  ];
+};
+
+/**
+ * Fallback method for general recommendations (no department priority)
+ */
+const getGeneralRecommendations = (
+  user: User,
+  availableSeats: Seat[],
   preferences: {
     department?: string;
     nearTeam?: boolean;
+    preferredFloor?: number;
+    preferredSection?: string;
+    amenities?: string[];
+  }
+): AiResponse => {
+  // Filter seats based on preferences
+  let recommendedSeats = [...availableSeats];
+  
+  if (preferences.preferredFloor !== undefined) {
+    recommendedSeats = recommendedSeats.filter(
+      seat => seat.floor === preferences.preferredFloor
+    );
+  }
+  
+  if (preferences.preferredSection) {
+    recommendedSeats = recommendedSeats.filter(
+      seat => seat.section === preferences.preferredSection
+    );
+  }
+  
+  if (preferences.amenities && preferences.amenities.length > 0) {
+    recommendedSeats = recommendedSeats.filter(seat => 
+      preferences.amenities!.every(amenity => seat.amenities.includes(amenity))
+    );
+  }
+  
+  // If team-based allocation is requested
+  if (preferences.department && preferences.nearTeam) {
+    recommendedSeats = recommendedSeats.filter(
+      seat => seat.nearTeam === preferences.department
+    );
+  }
+  
+  // Sort by best match
+  recommendedSeats.sort((a, b) => {
+    // Simple scoring algorithm
+    const scoreA = getSeatScore(a, preferences);
+    const scoreB = getSeatScore(b, preferences);
+    return scoreB - scoreA;
+  });
+  
+  // Take the top 3 recommendations
+  const topRecommendations = recommendedSeats.slice(0, 3);
+  
+  if (topRecommendations.length === 0) {
+    return {
+      recommendation: {
+        message: "No seats match your preferences. Try adjusting your criteria.",
+      }
+    };
+  }
+  
+  return {
+    recommendation: {
+      seatIds: topRecommendations.map(seat => seat.id),
+      message: `Based on your general preferences, I recommend these seats which provide ${getRecommendationReasoning(topRecommendations[0], preferences)}.`,
+    }
+  };
+};
+
+// Helper function to generate a score for a seat based on preferences
+const getSeatScore = (
+  seat: Seat, 
+  preferences: {
     preferredFloor?: number;
     preferredSection?: string;
     amenities?: string[];
@@ -114,26 +280,22 @@ const getSeatScore = (
   let score = 0;
   
   // Match floor preference
-  if (seat.floor === (preferences.preferredFloor || user.preferences.preferredFloor)) {
+  if (preferences.preferredFloor !== undefined && seat.floor === preferences.preferredFloor) {
     score += 3;
   }
   
   // Match section preference
-  if (seat.section === (preferences.preferredSection || user.preferences.preferredSection)) {
+  if (preferences.preferredSection && seat.section === preferences.preferredSection) {
     score += 2;
   }
   
   // Match amenities
-  const desiredAmenities = preferences.amenities || user.preferences.amenities;
-  desiredAmenities.forEach(amenity => {
-    if (seat.amenities.includes(amenity)) {
-      score += 1;
-    }
-  });
-  
-  // Team proximity
-  if (preferences.nearTeam && seat.nearTeam === preferences.department) {
-    score += 4;
+  if (preferences.amenities) {
+    preferences.amenities.forEach(amenity => {
+      if (seat.amenities.includes(amenity)) {
+        score += 1;
+      }
+    });
   }
   
   return score;
