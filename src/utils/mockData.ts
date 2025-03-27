@@ -1,4 +1,3 @@
-
 // Seat types and statuses
 export type SeatStatus = 'available' | 'booked' | 'reserved' | 'occupied';
 
@@ -11,6 +10,7 @@ export interface Seat {
   section: string;
   amenities: string[];
   nearTeam?: string;
+  departmentZone?: string; // Added department zone field
 }
 
 export interface Office {
@@ -60,6 +60,44 @@ export const MOCK_OFFICE: Office = {
   teams: ['Engineering', 'Design', 'Marketing', 'Sales', 'HR', 'Finance', 'Product', 'Leadership']
 };
 
+// Department zone mapping for the office
+export const DEPARTMENT_ZONES: Record<string, { floor: number, sections: string[] }> = {
+  'Engineering': { floor: 1, sections: ['A', 'B'] },
+  'Design': { floor: 1, sections: ['C', 'D'] },
+  'Marketing': { floor: 2, sections: ['A'] },
+  'Sales': { floor: 2, sections: ['B'] },
+  'HR': { floor: 2, sections: ['C'] },
+  'Finance': { floor: 2, sections: ['D'] },
+  'Product': { floor: 3, sections: ['A'] },
+  'Leadership': { floor: 3, sections: ['B', 'C'] }
+};
+
+// Function to check if a seat is within a department zone
+export const isSeatInDepartmentZone = (seat: Seat, department: string): boolean => {
+  const zone = DEPARTMENT_ZONES[department];
+  if (!zone) return false;
+  
+  return seat.floor === zone.floor && zone.sections.includes(seat.section);
+};
+
+// Function to check if a seat is near a department zone
+export const isSeatNearDepartmentZone = (seat: Seat, department: string): boolean => {
+  const zone = DEPARTMENT_ZONES[department];
+  if (!zone) return false;
+  
+  // Consider seats on the same floor or adjacent floors as "near"
+  const isNearbyFloor = Math.abs(seat.floor - zone.floor) <= 1;
+  
+  // If on the same floor, consider adjacent sections as "near"
+  if (seat.floor === zone.floor) {
+    // Different section but on same floor is considered nearby
+    return !zone.sections.includes(seat.section);
+  }
+  
+  // If on a different but adjacent floor, it's considered nearby
+  return isNearbyFloor;
+};
+
 export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
   const floor = Math.floor(i / 30) + 1;
   const sectionIndex = Math.floor((i % 30) / 8);
@@ -78,6 +116,15 @@ export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
   const randomTeamIndex = Math.floor(Math.random() * MOCK_OFFICE.teams.length);
   const nearTeam = Math.random() > 0.5 ? MOCK_OFFICE.teams[randomTeamIndex] : undefined;
   
+  // Assign department zone based on floor and section
+  let departmentZone: string | undefined = undefined;
+  for (const [dept, zone] of Object.entries(DEPARTMENT_ZONES)) {
+    if (floor === zone.floor && zone.sections.includes(section)) {
+      departmentZone = dept;
+      break;
+    }
+  }
+  
   return {
     id: `seat-${i + 1}`,
     name: `${floor}${section}-${seatNumber}`,
@@ -86,6 +133,7 @@ export const MOCK_SEATS: Seat[] = Array.from({ length: 80 }, (_, i) => {
     section,
     amenities,
     nearTeam,
+    departmentZone,
     assignedTo: randomStatus === 'booked' || randomStatus === 'occupied' ? `user-${Math.floor(Math.random() * 10) + 1}` : undefined
   };
 });
@@ -135,7 +183,7 @@ export const MOCK_UTILIZATION_DATA: UtilizationData[] = Array.from({ length: 14 
 });
 
 // Helper functions to simulate API calls
-export const fetchSeats = async (floor?: number, section?: string): Promise<Seat[]> => {
+export const fetchSeats = async (floor?: number, section?: string, department?: string): Promise<Seat[]> => {
   // Simulate API latency
   await new Promise(resolve => setTimeout(resolve, 800));
   
@@ -149,7 +197,36 @@ export const fetchSeats = async (floor?: number, section?: string): Promise<Seat
     seats = seats.filter(seat => seat.section === section);
   }
   
+  if (department !== undefined) {
+    seats = seats.filter(seat => {
+      // Get seats that are either in the department zone or have that department as nearTeam
+      return seat.departmentZone === department || seat.nearTeam === department;
+    });
+  }
+  
   return seats;
+};
+
+export const fetchSeatsByDepartmentZone = async (department: string, includeNearby: boolean = false): Promise<{
+  inZone: Seat[],
+  nearZone: Seat[]
+}> => {
+  // Simulate API latency
+  await new Promise(resolve => setTimeout(resolve, 800));
+  
+  const allSeats = [...MOCK_SEATS];
+  
+  const inZone = allSeats.filter(seat => 
+    isSeatInDepartmentZone(seat, department)
+  );
+  
+  const nearZone = includeNearby ? 
+    allSeats.filter(seat => 
+      !isSeatInDepartmentZone(seat, department) && 
+      isSeatNearDepartmentZone(seat, department)
+    ) : [];
+  
+  return { inZone, nearZone };
 };
 
 export const fetchUserInfo = async (userId: string): Promise<User> => {
@@ -192,4 +269,3 @@ export const checkSeatConfirmation = async (bookingId: string): Promise<boolean>
   // Simulate 80% confirmation rate
   return Math.random() > 0.2;
 };
-

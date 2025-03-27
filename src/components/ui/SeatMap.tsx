@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { Seat, fetchSeats } from '../../utils/mockData';
+import { Seat, fetchSeats, DEPARTMENT_ZONES } from '../../utils/mockData';
 import { ChevronDown, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -15,14 +15,28 @@ interface SeatMapProps {
   selectedSeatId?: string;
   floor?: number;
   section?: string;
+  highlightDepartment?: string;
 }
 
-const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: initialSection }: SeatMapProps) => {
+const SeatMap = ({ 
+  onSelectSeat, 
+  selectedSeatId, 
+  floor: initialFloor, 
+  section: initialSection,
+  highlightDepartment
+}: SeatMapProps) => {
   const [seats, setSeats] = useState<Seat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [floor, setFloor] = useState(initialFloor || 1);
   const [section, setSection] = useState(initialSection || 'All');
+  
+  // Set floor based on highlighted department if provided
+  useEffect(() => {
+    if (highlightDepartment && DEPARTMENT_ZONES[highlightDepartment]) {
+      setFloor(DEPARTMENT_ZONES[highlightDepartment].floor);
+    }
+  }, [highlightDepartment]);
   
   useEffect(() => {
     const loadSeats = async () => {
@@ -77,6 +91,11 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
       }
     }
     
+    // Add department zone highlighting
+    if (highlightDepartment && seat.departmentZone === highlightDepartment) {
+      seatClass += ' border-2 border-blue-500';
+    }
+    
     return (
       <Popover key={seat.id}>
         <PopoverTrigger asChild>
@@ -85,6 +104,9 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
             onClick={() => handleSeatClick(seat)}
           >
             <span className="font-medium">{seat.name}</span>
+            {seat.departmentZone && highlightDepartment && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500"></span>
+            )}
           </div>
         </PopoverTrigger>
         <PopoverContent className="w-80">
@@ -96,6 +118,9 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
             <div className="text-sm text-gray-500">
               <p>Floor: {seat.floor}</p>
               <p>Section: {seat.section}</p>
+              {seat.departmentZone && (
+                <p className="text-blue-600 font-medium">Department: {seat.departmentZone}</p>
+              )}
             </div>
             {seat.amenities.length > 0 && (
               <div>
@@ -159,6 +184,11 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
     }
     groupedSeats[seat.section].push(seat);
   });
+  
+  // Get sections for the highlighted department
+  const highlightedSections = highlightDepartment && DEPARTMENT_ZONES[highlightDepartment] 
+    ? DEPARTMENT_ZONES[highlightDepartment].sections 
+    : [];
   
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-fade-in">
@@ -226,6 +256,12 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
               <span className="text-xs">Selected</span>
             </div>
           )}
+          {highlightDepartment && (
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-white border-2 border-blue-500 rounded-sm mr-1.5"></div>
+              <span className="text-xs">Department Zone</span>
+            </div>
+          )}
         </div>
       </div>
       
@@ -237,8 +273,22 @@ const SeatMap = ({ onSelectSeat, selectedSeatId, floor: initialFloor, section: i
         ) : (
           <div className="space-y-8">
             {Object.entries(groupedSeats).map(([sectionKey, sectionSeats]) => (
-              <div key={sectionKey} className="bg-white rounded-lg p-4 shadow-sm border border-slate-100">
-                <h3 className="text-md font-medium mb-3">Section {sectionKey}</h3>
+              <div 
+                key={sectionKey} 
+                className={`bg-white rounded-lg p-4 shadow-sm border ${
+                  highlightedSections.includes(sectionKey) ? 'border-blue-300 bg-blue-50/30' : 'border-slate-100'
+                }`}
+              >
+                <h3 className={`text-md font-medium mb-3 ${
+                  highlightedSections.includes(sectionKey) ? 'text-blue-700' : ''
+                }`}>
+                  Section {sectionKey}
+                  {highlightedSections.includes(sectionKey) && highlightDepartment && (
+                    <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                      {highlightDepartment} Zone
+                    </span>
+                  )}
+                </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                   {sectionSeats.map(renderSeat)}
                 </div>

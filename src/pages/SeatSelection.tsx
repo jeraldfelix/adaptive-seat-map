@@ -6,23 +6,31 @@ import SeatMap from '../components/ui/SeatMap';
 import BookingCard from '../components/ui/BookingCard';
 import NLPSeatPrompt from '../components/ui/NLPSeatPrompt';
 import AIIntegration from '../components/ui/AIIntegration';
-import { Seat, MOCK_CURRENT_USER, fetchSeats } from '../utils/mockData';
-import { Search, Filter, ChevronDown, Sliders, UserPlus2 } from 'lucide-react';
+import { Seat, MOCK_CURRENT_USER, fetchSeats, fetchSeatsByDepartmentZone, DEPARTMENT_ZONES } from '../utils/mockData';
+import { Search, Filter, ChevronDown, Sliders, UserPlus2, Building, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { Badge } from "@/components/ui/badge";
 
 const SeatSelection = () => {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [availableSeats, setAvailableSeats] = useState<Seat[]>([]);
+  const [departmentSeats, setDepartmentSeats] = useState<{
+    inZone: Seat[],
+    nearZone: Seat[]
+  }>({ inZone: [], nearZone: [] });
   const [loading, setLoading] = useState(true);
+  const [departmentLoading, setDepartmentLoading] = useState(false);
   const [filters, setFilters] = useState({
     floor: '',
     section: '',
     amenities: [] as string[],
+    department: MOCK_CURRENT_USER.team || '',
   });
   const [activeTab, setActiveTab] = useState('map');
+  const [showDepartmentZones, setShowDepartmentZones] = useState(false);
   
   useEffect(() => {
     const loadSeats = async () => {
@@ -42,6 +50,25 @@ const SeatSelection = () => {
     
     loadSeats();
   }, []);
+  
+  // Load department-specific seats when filter changes
+  useEffect(() => {
+    const loadDepartmentSeats = async () => {
+      if (!filters.department) return;
+      
+      try {
+        setDepartmentLoading(true);
+        const result = await fetchSeatsByDepartmentZone(filters.department, true);
+        setDepartmentSeats(result);
+      } catch (error) {
+        console.error('Failed to load department seats:', error);
+      } finally {
+        setDepartmentLoading(false);
+      }
+    };
+    
+    loadDepartmentSeats();
+  }, [filters.department]);
   
   const handleSelectSeat = (seat: Seat) => {
     setSelectedSeat(seat);
@@ -90,12 +117,18 @@ const SeatSelection = () => {
       return false;
     }
     
+    // Filter by department (if enabled)
+    if (showDepartmentZones && filters.department && seat.departmentZone !== filters.department) {
+      return false;
+    }
+    
     return true;
   });
   
   // Get unique floors and sections for filter dropdowns
   const uniqueFloors = [...new Set(availableSeats.map((seat) => seat.floor))].sort();
   const uniqueSections = [...new Set(availableSeats.map((seat) => seat.section))].sort();
+  const departments = Object.keys(DEPARTMENT_ZONES);
   
   // Get all possible amenities for filter checkboxes
   const allAmenities = [
@@ -145,6 +178,39 @@ const SeatSelection = () => {
                   </PopoverTrigger>
                   <PopoverContent className="w-80">
                     <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm">Department</h4>
+                        <select
+                          className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                          value={filters.department}
+                          onChange={(e) => 
+                            setFilters({ ...filters, department: e.target.value })
+                          }
+                        >
+                          <option value="">Any Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept} value={dept}>
+                              {dept}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">Show Department Zones</h4>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={showDepartmentZones}
+                              onChange={() => setShowDepartmentZones(!showDepartmentZones)}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                      
                       <div className="space-y-2">
                         <h4 className="font-medium text-sm">Floor</h4>
                         <select
@@ -226,6 +292,7 @@ const SeatSelection = () => {
                               floor: '',
                               section: '',
                               amenities: [],
+                              department: MOCK_CURRENT_USER.team || '',
                             })
                           }
                         >
@@ -248,6 +315,23 @@ const SeatSelection = () => {
             </div>
           </div>
           
+          {/* Department Zones Info */}
+          {showDepartmentZones && filters.department && (
+            <div className="mb-6">
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <Building className="h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-blue-800">Department Zone: {filters.department}</h3>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Viewing seats in the {filters.department} department zone. These seats are reserved primarily for members of this department.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content - Takes 2/3 of the width on desktop */}
             <div className="lg:col-span-2">
@@ -269,7 +353,11 @@ const SeatSelection = () => {
                   />
                   
                   <div className="mt-4">
-                    <SeatMap onSelectSeat={handleSelectSeat} selectedSeatId={selectedSeat?.id} />
+                    <SeatMap 
+                      onSelectSeat={handleSelectSeat} 
+                      selectedSeatId={selectedSeat?.id} 
+                      highlightDepartment={showDepartmentZones ? filters.department : undefined}
+                    />
                   </div>
                 </TabsContent>
                 
@@ -310,6 +398,7 @@ const SeatSelection = () => {
                     <BookingCard
                       seat={selectedSeat}
                       userId={MOCK_CURRENT_USER.id}
+                      userDepartment={filters.department}
                       onBookingComplete={handleBookingComplete}
                     />
                   ) : (
@@ -329,6 +418,115 @@ const SeatSelection = () => {
               </Card>
             </div>
           </div>
+          
+          {/* Department Seats Section */}
+          {filters.department && (
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-4 flex items-center">
+                <Building className="h-5 w-5 mr-2" />
+                {filters.department} Department Seats
+              </h2>
+              
+              {departmentLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-48 bg-white rounded-lg shadow-sm border border-gray-200 animate-pulse"
+                    ></div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/* In Zone Seats */}
+                  {departmentSeats.inZone.length > 0 ? (
+                    <>
+                      <div className="mb-2 flex items-center">
+                        <h3 className="text-lg font-medium">In Department Zone</h3>
+                        <Badge className="ml-2 bg-green-100 text-green-800 hover:bg-green-200">
+                          {departmentSeats.inZone.filter(seat => seat.status === 'available').length} Available
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                        {departmentSeats.inZone
+                          .filter(seat => seat.status === 'available')
+                          .slice(0, 4)
+                          .map((seat) => (
+                            <div
+                              key={seat.id}
+                              className={`cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+                                selectedSeat?.id === seat.id ? 'ring-2 ring-primary' : ''
+                              }`}
+                              onClick={() => handleSelectSeat(seat)}
+                            >
+                              <BookingCard
+                                seat={seat}
+                                userId={MOCK_CURRENT_USER.id}
+                                userDepartment={filters.department}
+                                onBookingComplete={handleBookingComplete}
+                                inDepartmentZone={true}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-yellow-50 rounded-lg shadow-sm border border-yellow-200 p-6 text-center mb-8">
+                      <h3 className="text-lg font-medium text-yellow-800 mb-2">
+                        No Available Seats in {filters.department} Zone
+                      </h3>
+                      <p className="text-sm text-yellow-700 mb-4">
+                        All seats in your department zone are currently occupied or reserved.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Near Zone Seats */}
+                  {departmentSeats.nearZone.length > 0 ? (
+                    <>
+                      <div className="mb-2 flex items-center">
+                        <h3 className="text-lg font-medium">Near Department Zone</h3>
+                        <Badge className="ml-2 bg-blue-100 text-blue-800 hover:bg-blue-200">
+                          {departmentSeats.nearZone.filter(seat => seat.status === 'available').length} Available
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {departmentSeats.nearZone
+                          .filter(seat => seat.status === 'available')
+                          .slice(0, 4)
+                          .map((seat) => (
+                            <div
+                              key={seat.id}
+                              className={`cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+                                selectedSeat?.id === seat.id ? 'ring-2 ring-primary' : ''
+                              }`}
+                              onClick={() => handleSelectSeat(seat)}
+                            >
+                              <BookingCard
+                                seat={seat}
+                                userId={MOCK_CURRENT_USER.id}
+                                userDepartment={filters.department}
+                                onBookingComplete={handleBookingComplete}
+                                inDepartmentZone={false}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg shadow-sm border border-gray-200 p-6 text-center">
+                      <h3 className="text-lg font-medium text-gray-800 mb-2">
+                        No Available Seats Near {filters.department} Zone
+                      </h3>
+                      <p className="text-sm text-gray-700">
+                        Try adjusting your filters or search criteria.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           
           {/* Available Seats Section */}
           <div className="mt-8">
@@ -356,7 +554,9 @@ const SeatSelection = () => {
                     <BookingCard
                       seat={seat}
                       userId={MOCK_CURRENT_USER.id}
+                      userDepartment={filters.department}
                       onBookingComplete={handleBookingComplete}
+                      inDepartmentZone={seat.departmentZone === filters.department}
                     />
                   </div>
                 ))}
@@ -376,6 +576,7 @@ const SeatSelection = () => {
                       floor: '',
                       section: '',
                       amenities: [],
+                      department: MOCK_CURRENT_USER.team || '',
                     })
                   }
                 >

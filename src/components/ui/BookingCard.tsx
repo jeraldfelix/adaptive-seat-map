@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
-import { Calendar, MapPin, Clock, CheckCircle, XCircle, Briefcase, Users } from 'lucide-react';
-import { Seat, bookSeat } from '../../utils/mockData';
+import { Calendar, MapPin, Clock, CheckCircle, XCircle, Briefcase, Users, Building } from 'lucide-react';
+import { Seat, bookSeat, isSeatInDepartmentZone } from '../../utils/mockData';
 import StatusBadge from './StatusBadge';
 import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { format, addDays } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -31,7 +32,9 @@ import { cn } from "@/lib/utils";
 interface BookingCardProps {
   seat: Seat;
   userId: string;
+  userDepartment?: string;
   onBookingComplete?: () => void;
+  inDepartmentZone?: boolean;
 }
 
 const bookingFormSchema = z.object({
@@ -47,7 +50,7 @@ const bookingFormSchema = z.object({
 
 type BookingFormValues = z.infer<typeof bookingFormSchema>;
 
-const BookingCard = ({ seat, userId, onBookingComplete }: BookingCardProps) => {
+const BookingCard = ({ seat, userId, userDepartment, onBookingComplete, inDepartmentZone }: BookingCardProps) => {
   const [loading, setLoading] = useState(false);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [showPreferencesForm, setShowPreferencesForm] = useState(false);
@@ -56,7 +59,7 @@ const BookingCard = ({ seat, userId, onBookingComplete }: BookingCardProps) => {
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
-      department: "",
+      department: userDepartment || "",
       seatPreference: "",
       date: new Date(),
       startTime: "09:00",
@@ -72,6 +75,13 @@ const BookingCard = ({ seat, userId, onBookingComplete }: BookingCardProps) => {
   const handleSubmitPreferences = async (values: BookingFormValues) => {
     try {
       setLoading(true);
+      
+      // If seat is not in user's department zone, show a notification
+      if (values.department && !inDepartmentZone && seat.departmentZone) {
+        toast.info(`Note: This seat is in the ${seat.departmentZone} department zone.`, {
+          description: "You're booking a seat outside your department's allocated zone."
+        });
+      }
       
       // Simulate API call to book seat with preferences
       await bookSeat(seat.id, userId);
@@ -334,6 +344,25 @@ const BookingCard = ({ seat, userId, onBookingComplete }: BookingCardProps) => {
       </CardHeader>
       <CardContent className="pt-2">
         <div className="space-y-3">
+          {seat.departmentZone && (
+            <div className="flex items-center gap-1.5">
+              <Building className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">
+                {seat.departmentZone} Department
+              </span>
+              {inDepartmentZone === true && userDepartment && userDepartment === seat.departmentZone && (
+                <Badge variant="outline" className="ml-1 bg-green-50 text-green-700 border-green-200 text-xs">
+                  Your Department
+                </Badge>
+              )}
+              {inDepartmentZone === false && userDepartment && userDepartment !== seat.departmentZone && (
+                <Badge variant="outline" className="ml-1 bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+                  Other Department
+                </Badge>
+              )}
+            </div>
+          )}
+          
           {seat.amenities.length > 0 && (
             <div>
               <div className="text-sm font-medium mb-1.5">Amenities</div>
